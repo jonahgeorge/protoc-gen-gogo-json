@@ -34,10 +34,11 @@ func (p *JSONifyModule) InitContext(c pgs.BuildContext) {
 	p.ctx = pgsgo.InitContext(c.Parameters())
 
 	tpl := template.New("jsonify").Funcs(map[string]interface{}{
-		"package":     p.ctx.PackageName,
-		"name":        p.ctx.Name,
-		"marshaler":   p.marshaler,
-		"unmarshaler": p.unmarshaler,
+		"package":       p.ctx.PackageName,
+		"name":          p.ctx.Name,
+		"marshaler":     p.marshaler,
+		"unmarshaler":   p.unmarshaler,
+		"allow_unknown": p.allowUnknown,
 	})
 
 	p.tpl = template.Must(tpl.Parse(jsonifyTpl))
@@ -47,7 +48,6 @@ func (p *JSONifyModule) InitContext(c pgs.BuildContext) {
 func (p *JSONifyModule) Name() string { return "jsonify" }
 
 func (p *JSONifyModule) Execute(targets map[string]pgs.File, pkgs map[string]pgs.Package) []pgs.Artifact {
-
 	for _, t := range targets {
 		p.generate(t)
 	}
@@ -62,6 +62,14 @@ func (p *JSONifyModule) generate(f pgs.File) {
 
 	name := p.ctx.OutputPath(f).SetExt(".json.go")
 	p.AddGeneratorTemplateFile(name.String(), p.tpl, f)
+}
+
+func (p *JSONifyModule) allowUnknown(m pgs.Message) bool {
+	b, err := p.ctx.Params().Bool("allow_unknown")
+	if err != nil {
+		return false
+	}
+	return b
 }
 
 func (p *JSONifyModule) marshaler(m pgs.Message) pgs.Name {
@@ -85,7 +93,7 @@ import (
 // {{ marshaler . }} describes the default jsonpb.Marshaler used by all
 // instances of {{ name . }}. This struct is safe to replace or modify but
 // should not be done so concurrently.
-var {{ marshaler . }} = new(jsonpb.Marshaler)
+var {{ marshaler . }} = &jsonpb.Marshaler{}
 
 // MarshalJSON satisfies the encoding/json Marshaler interface. This method
 // uses the more correct jsonpb package to correctly marshal the message.
@@ -105,7 +113,9 @@ var _ json.Marshaler = (*{{ name . }})(nil)
 // {{ unmarshaler . }} describes the default jsonpb.Unmarshaler used by all
 // instances of {{ name . }}. This struct is safe to replace or modify but
 // should not be done so concurrently.
-var {{ unmarshaler . }} = new(jsonpb.Unmarshaler)
+var {{ unmarshaler . }} = &jsonpb.Unmarshaler{
+  AllowUnknownFields: {{ allow_unknown . }},
+}
 
 // UnmarshalJSON satisfies the encoding/json Unmarshaler interface. This method
 // uses the more correct jsonpb package to correctly unmarshal the message.

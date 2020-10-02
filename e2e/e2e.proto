@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package e2e;
+
+option go_package = "e2e";
+
+message Basic {
+  string a = 1;
+}
